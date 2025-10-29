@@ -1,0 +1,65 @@
+# Simple Chatbot with Memory
+
+import os
+
+from typing import TypedDict, List, Union
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
+from langgraph.graph import StateGraph, START, END
+from dotenv import load_dotenv
+
+load_dotenv()
+
+
+# creating a Agent state
+
+class AgentState(TypedDict):
+    messages: List[Union[HumanMessage, AIMessage]]
+
+
+llm_model = ChatOpenAI(model="gpt-4o")
+
+
+# defining the agent process
+def process(state: AgentState) -> AgentState:
+    """This node will solve the request you input"""
+
+    response = llm_model.invoke(state["messages"])
+
+    state["messages"].append(AIMessage(content=response.content))
+    print(f"\nAI: {response.content}")
+    # print("CURRENT STATE: ", state["messages"])
+
+    return state
+
+
+# creating the graph
+graph = StateGraph(AgentState)
+graph.add_node("process", process)
+graph.add_edge(START, "process")
+graph.add_edge("process", END)
+
+agent = graph.compile()
+
+
+conversation_history = []
+
+
+user_input = input("User Input: ")
+
+while user_input != "exit":
+    conversation_history.append(HumanMessage(content=user_input))
+    results = agent.invoke({"messages": conversation_history})
+    conversation_history = results["messages"]
+    user_input = input("\nUser Input: ")
+
+with open("conversationLogging.txt", "w") as file:
+    file.write("Your Conversation log:\n")
+
+    for message in conversation_history:
+        if isinstance(message, HumanMessage):
+            file.write(f"User: {message.content}\n")
+        elif isinstance(message, AIMessage):
+            file.write(f"AI: {message.content}\n")
+
+    file.write("End of Conversation")
